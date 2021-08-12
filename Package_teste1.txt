@@ -1,2 +1,1747 @@
+create or replace package PKG_MVP_COMPL_IFRS17_BI is
 
- 
+  /* --------------------------------------------------------- +
+  | Gera arquivo dos dados da tabela X2009020_VCR              |
+  |                                                            |
+  | CONFITEC : 04/12/2020                                      |
+  | Author   : Cleber A. souza                                 |
+  | Versao   : v 1.0                                           |
+  +----------------------------------------------------------- +
+   apenas para mostrar modificacoes no arquivo e ser apresentado
+   pelo git
+
+  */
+
+
+
+  PROCEDURE p_carrega_produto;
+
+  PROCEDURE p_carrega_cobertura;
+
+  PROCEDURE p_carrega_modalidade;
+
+  PROCEDURE p_carrega_ramocontabil;
+
+  PROCEDURE p_carrega_cliente;
+
+  PROCEDURE p_carrega_benef_tercero;
+
+  PROCEDURE p_carrega_usuario;
+
+  PROCEDURE p_carrega_tramitador;
+
+  PROCEDURE p_carrega_riscos_vigentes;
+
+  PROCEDURE p_execute_processo_cad;
+
+END PKG_MVP_COMPL_IFRS17_BI;
+/
+CREATE OR REPLACE PACKAGE BODY PKG_MVP_COMPL_IFRS17_BI IS
+  /*
+  +--------------------- ----------------------------------------------+
+  | Extracao de dados complementares CORE BI                           |
+  | Projeto MVP                                                        |
+  | Versão  : 1.00                                                     |
+  | Empresa : CONFITEC                                                 |
+  | Autor   : Cleber Almeida de Souza                                  |
+  | Data    : 03/12/2020                                               |
+  | Gravar registros de multiplos cadastros para o mvp                 |
+  +--------------------------------------------------------------------+
+  */
+
+  PROCEDURE p_carrega_produto IS
+  
+    /*------------------------------------------------------------------+
+    | Carga de Produto                                                  |
+    +-------------------------------------------------------------------+
+    */
+  
+    CURSOR l_cur_produto IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao, --01
+             null ts_alteracao, --02
+             user cd_usuario_inclusao, --03
+             null cd_usuario_alteracao, --04
+             60 cod_cia_legado, --05
+             '20' cod_cia_cnpj, --06
+             58 cod_sistema_legado, --07
+             '58' cod_sistema_cnpj, --08
+             to_number(substr(rp.codigoramo, 1, 4)) cod_sector, --09
+             substr(rp.description, 1, 29) nom_sector, --10
+             to_number(substr(rp.codigoramo, 1, 4)) cod_subsector, --11
+             substr(rp.description, 1, 29) nom_subsector, --12
+             to_number(substr(prod.modalidade, 1, 6)) cod_ramo, --13          *********************  codigo do produto
+             substr(prod.nomeprodutosimplificado, 1, 29) nom_ramo, --14
+             'V' cod_tratamiento, --15
+             'VIDA' nom_tratamiento, --16
+             'VID' cod_linea_negocio, --17  conforme solicitado por Marcos Jonathan em 26/05/2021
+             'VIDA' nom_linea_negocio, --18
+             null cod_sublinea_negocio, --19
+             null nom_sublinea_negocio, --20
+             'N' mca_inh, --21
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusao, --22
+             0 status_processo_corebi, --23
+             null data_processo_corebi --24
+        FROM produto prod, ramoproduto rp
+       WHERE prod.ramoproduto_id = rp.id
+       order by cod_ramo, nom_ramo;
+  
+    TYPE TYPTAB_TMP_PRODUTO IS TABLE OF A1009420_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_PRODUTO;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+    --
+  BEGIN
+    --
+  
+    IF l_cur_produto%ISOPEN THEN
+      CLOSE l_cur_produto;
+    END IF;
+    --
+    OPEN l_cur_produto;
+    --
+    LOOP
+      --
+      FETCH l_cur_produto BULK COLLECT
+        INTO l_lista_select LIMIT 5000;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009420_vcr VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          NULL;
+      END;
+    
+      COMMIT;
+    
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_produto;
+  END p_carrega_produto;
+  ---------------------------------------------------------------------
+  PROCEDURE p_carrega_cobertura IS
+  
+    /*------------------------------------------------------------------+
+    | Carga de Coberturas                                                |
+    +-------------------------------------------------------------------+
+    */
+    CURSOR l_cur_cobertura IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao, --01
+             null ts_alteracao, --02
+             user cd_usuario_inclusao, --03
+             null cd_usuario_alteracao, --04
+             60 cod_cia_legado, --05
+             '20' cod_cia_cnpj, --06
+             58 cod_sistema_legado, --07
+             '58' cod_sistema_cnpj, --08
+             CASE i.tipocobertura
+               WHEN 'BÁSICA' THEN
+                '1'
+               WHEN 'COMPLEMENTAR DA BÁSICA' THEN
+                '2'
+               WHEN 'ASSISTENCIA_DOMICILIAR' THEN
+                '5'
+               WHEN 'ASSISTENCIA_FUNERAL' THEN
+                '5'
+               WHEN 'ADICIONAL' THEN
+                '2'
+               WHEN 'DECESSO' THEN
+                '1'
+               ELSE
+                '0'
+             END tip_cob, --09
+             CASE i.tipocobertura
+               WHEN 'BÁSICA' THEN
+                'INFORMATIVA' --(1 de para)
+               WHEN 'COMPLEMENTAR DA BÁSICA' THEN
+                'BASICA ADICIONAL' --(2 de para)
+               WHEN 'ASSISTENCIA_DOMICILIAR' THEN
+                'SERVICIOS' --(5 de para)
+               WHEN 'ASSISTENCIA_FUNERAL' THEN
+                'SERVICIOS' --(5 de para)
+               WHEN 'ADICIONAL' THEN
+                'BASICA ADICIONAL' --(2 de para)
+               WHEN 'DECESSO' THEN
+                'INFORMATIVA' --(1 de para)
+               ELSE
+                '_'
+             END nom_tip_cob, --10
+             substr(to_char(i.numero), 1, 4) cod_cob, --11
+             TRANSLATE(substr(i.description, 1, 50),
+                       'ŠŽšžŸÁÇÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕËÜÏÖÑÝåáçéíóúàèìòùâêîôûãõëüïöñýÿ',
+                       'SZszYACEIOUAEIOUAEIOUAOEUIONYaaceiouaeiouaeiouaoeuionyy') nom_cob, --12
+             'N' mca_inh, --13
+             substr(to_char(i.numero), 1, 4) cod_cob_homolocacion, --14
+             TRANSLATE(substr(i.description, 1, 50),
+                       'ŠŽšžŸÁÇÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕËÜÏÖÑÝåáçéíóúàèìòùâêîôûãõëüïöñýÿ',
+                       'SZszYACEIOUAEIOUAEIOUAOEUIONYaaceiouaeiouaeiouaoeuionyy') nom_cob_homolocacion, --15
+             to_char(sysdate, 'DD/MM/YYYY') data_inclusao, --16
+             0 status_processo_corebi, --17
+             null DATA_PROCESSO_COREBI --18
+        FROM itemprodutocontratavel I
+        JOIN produto P
+          ON P.id = I.produto_id
+        JOIN ramoproduto R
+          ON R.id = I.ramoproduto_id
+        JOIN ramoproduto RP
+          ON RP.id = P.Ramoproduto_Id
+       ORDER by cod_cob, tip_cob;
+    --
+    TYPE TYPTAB_TMP_COBERTURA IS TABLE OF A1009421_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_COBERTURA;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+  BEGIN
+    --
+    IF l_cur_cobertura%ISOPEN THEN
+      CLOSE l_cur_cobertura;
+    END IF;
+    --
+    OPEN l_cur_cobertura;
+    --
+    LOOP
+      --
+      begin
+        FETCH l_cur_cobertura BULK COLLECT
+          INTO l_lista_select LIMIT 5000;
+      exception
+        when others then
+          NULL;
+      END;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009421_VCR VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          NULL;
+      END;
+    
+      COMMIT;
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_cobertura;
+  
+  END p_carrega_cobertura;
+  ------------------------------------------------------------------------------------------
+  PROCEDURE p_carrega_modalidade IS
+    /*------------------------------------------------------------------+
+    | Carga de Modalidade                                               |
+    +-------------------------------------------------------------------+
+    */
+  
+    CURSOR l_cur_modal IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') TS_INCLUSAO, --01
+             NULL TS_ALTERACAO, --02
+             USER CD_USUARIO_INCLUSAO, --03
+             NULL CD_USUARIO_ALTERACAO, --04
+             60 COD_CIA_LEGADO, --05
+             '20' COD_CIA_CNPJ, --06
+             58 COD_SISTEMA_LEGADO, --07
+             '58' COD_SISTEMA_CNPJ, --08
+             TO_NUMBER(P.MODALIDADE) COD_MODALIDAD, --09
+             P.MODALIDADEPRODUTO NOM_MODALIDAD, --10,
+             --99999 COD_MODALIDAD, --09 sunstituidos pelos valores acima
+             --'GENERICO' NOM_MODALIDAD, --10 sunstituidos pelos valores acima
+             to_number(substr(rp.codigoramo, 1, 4)) COD_SECTOR, --11
+             substr(rp.description, 1, 29) NOM_SECTOR, --12
+             to_number(substr(rp.codigoramo, 1, 4)) COD_SUBSECTOR, --13
+             substr(rp.description, 1, 29) NOM_SUBSECTOR, --14
+             to_number(p.modalidade) COD_RAMO, --15
+             substr(p.description, 1, 25) NOM_RAMO, --16
+             'V' COD_TRATAMIENTO, --17
+             'VIDA' NOM_TRATAMIENTO, --18
+             'N' MCA_INH, --19
+             to_char(sysdate, 'dd/mm/yyyy') DATA_INCLUSAO, --20
+             0 STATUS_PROCESSO_COREBI, --21
+             NULL DATA_PROCESSO_COREBI --22
+        FROM PRODUTO P, RAMOPRODUTO RP
+       WHERE P.RAMOPRODUTO_ID = RP.ID;
+    --
+  
+    TYPE TYPTAB_TMP_MODAL IS TABLE OF A1009422_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_MODAL;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+    --
+  BEGIN
+  
+    IF l_cur_modal%ISOPEN THEN
+      CLOSE l_cur_modal;
+    END IF;
+    --
+    OPEN l_cur_modal;
+    --
+    LOOP
+      --
+      FETCH l_cur_modal BULK COLLECT
+        INTO l_lista_select LIMIT 5000;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009422_VCR VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          NULL;
+      END;
+    
+      COMMIT;
+    
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_modal;
+  
+  END p_carrega_modalidade;
+  ------------------------------------------------------------------------------------------------------------
+  PROCEDURE p_carrega_ramocontabil IS
+    /*------------------------------------------------------------------+
+    | Carga de Ramo Contabil
+    +-------------------------------------------------------------------+
+    */
+  
+    CURSOR l_cur_rcontabil IS
+      SELECT to_char(sysdate, 'DD/MM/YYYY') TS_INCLUSAO, --02
+             null TS_ALTERACAO, --03
+             user CD_USUARIO_INCLUSAO, --04
+             null CD_USUARIO_ALTERACAO, --05
+             60 COD_CIA_LEGADO, --06
+             '20' COD_CIA_CNPJ, --07
+             58 COD_SISTEMA_LEGADO, --08
+             '58' COD_SISTEMA_CNPJ, --09
+             rp.codigoramo COD_SECTOR, --10
+             substr(rp.description, 1, 26) NOM_SECTOR, --11
+             rp.codigoramo COD_SUBSECTOR, --12
+             substr(rp.description, 1, 26) NOM_SUBSECTOR, --13
+             --lpad(rp.codigoramo, 3, 0) || lpad(r.codigoramo, 3, 0) ||
+             --substr(p.modalidade, 2, 4) COD_RAMO_CTABLE, --14                       ****** ver na especificacao 
+             lpad(r.codigoramo, 3, 0) || lpad(rP.codigoramo, 3, 0) ||
+             substr(p.modalidade, 2, 4) COD_RAMO_CTABLE, --14
+             substr(rp.description, 1, 26) NOM_RAMO_CTABLE, --15
+             0 TIP_DISTRIBUCION, --16
+             to_char(sysdate, 'DD/MM/YYYY') DATA_INCLUSAO, --17
+             0 STATUS_PROCESSO_COREBI, --18
+             null DATA_PROCESSO_COREBI --19
+        FROM itemprodutocontratavel I
+        JOIN produto P
+          ON P.id = I.produto_id
+        JOIN ramoproduto R
+          ON R.id = I.ramoproduto_id
+        JOIN ramoproduto RP
+          ON RP.id = P.Ramoproduto_Id;
+  
+    TYPE TYPTAB_TMP_RCONT IS TABLE OF A1009423_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_RCONT;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+    --
+  BEGIN
+  
+    IF l_cur_rcontabil%ISOPEN THEN
+      CLOSE l_cur_rcontabil;
+    END IF;
+    --
+    OPEN l_cur_rcontabil;
+    --
+    LOOP
+      --
+      FETCH l_cur_rcontabil BULK COLLECT
+        INTO l_lista_select LIMIT 5000;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009423_VCR VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          NULL;
+      END;
+    
+      COMMIT;
+    
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_rcontabil;
+  
+    /*  BEGIN
+        --
+        OPEN l_cur_rcontabil;
+          --
+          LOOP
+             --
+             Fetch l_cur_rcontabil
+                Into l_reg_rcont;
+             --
+             IF l_cur_rcontabil%FOUND THEN
+                l_conta_insert := nvl(l_conta_insert,0)+ 1;
+                 BEGIN
+                    INSERT INTO A1009423_vcr VALUES
+                                 (l_reg_rcont.ts_inclusao,            --01
+                                  l_reg_rcont.ts_alteracao,           --02
+                                  l_reg_rcont.cd_usuario_inclusao,    --03
+                                  l_reg_rcont.cd_usuario_alteracao,   --04
+                                  l_reg_rcont.cod_cia_legado,         --05
+                                  l_reg_rcont.cod_cia_cnpj,           --06
+                                  l_reg_rcont.cod_sistema_legado,     --07
+                                  l_reg_rcont.cod_sistema_cnpj,       --08
+                                  l_reg_rcont.cod_sector,             --10
+                                  l_reg_rcont.nom_sector,             --11
+                                  l_reg_rcont.cod_subsector,          --12
+                                  l_reg_rcont.nom_subsector,          --13
+                                  l_reg_rcont.cod_ramo_ctable,        --14
+                                  l_reg_rcont.nom_ramo_ctable,        --15
+                                  l_reg_rcont.tip_distribucion,       --16
+                                  l_reg_rcont.data_inclusao,          --17
+                                  l_reg_rcont.status_process_corebi,  --18
+                                  l_reg_rcont.data_processo_corebi    --19
+                                   );
+    
+                 EXCEPTION WHEN OTHERS THEN
+                   null;
+                 END;
+                 COMMIT;
+             END IF;
+             EXIT WHEN l_cur_rcontabil%NOTFOUND;
+             --
+          END LOOP;
+      --
+      CLOSE l_cur_rcontabil;
+      dbms_output.put_line('Carga concluída com sucesso. '||to_char(l_conta_insert) ||' ramo contabil gravadas ' );
+    */
+  
+  End p_carrega_ramocontabil;
+
+  -------------------------------------------------------------------------------------------------------------------
+  PROCEDURE p_carrega_cliente IS
+    /*------------------------------------------------------------------+
+    | Carga de cliente
+    +-------------------------------------------------------------------+
+    */
+    l_reg_cli      A1009426_VCR%ROWTYPE;
+    l_conta_insert NUMBER;
+    l_erro_oracle  VARCHAR2(1000);
+    l_erro_pk      VARCHAR2(300);
+    l_chave_end    NUMBER(20);
+  
+    CURSOR l_cur_cliente IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao,
+             null ts_alteracao,
+             user cd_usuario_inclusao,
+             null cd_usuario_alteracao,
+             60 cod_cia_legado, --01
+             '20' cod_cia_cnpj, --02
+             58 codigo_sistema_legado, --03
+             '58' cod_sistema_cnpj, --04
+             DECODE(p.cnpj, null, 'CPF', 'CGC') tip_docum, --05
+             DECODE(p.cnpj,
+                    null,
+                    'CADASTRO NACIONAL P.FISICA',
+                    'CADASTRO NACIONAL P.JURIDICA') nom_tip_docum, --06
+             DECODE(p.cnpj,
+                    null,
+                    substr(p.cpf, 1, 30),
+                    substr(p.cnpj, 1, 30)) cod_docum, --07
+             1 cod_act_tercero, --08
+             SUBSTR(p.description, (INSTR(p.description, ' ')), 25) ape1_tercero, --09
+             null ape2_tercero, --10
+             DECODE(p.cnpj,
+                    null,
+                    SUBSTR(p.description, 1, 40),
+                    SUBSTR(p.description, 1, 80)) nom_tercero, --11 se pessoa fisica pegar 40 posições, se cgc pegar 80 posicoes
+             DECODE(p.cnpj, null, 'CPF', 'CGC') tip_docum_PADRE, --12
+             DECODE(p.cnpj,
+                    null,
+                    substr(p.CPF, 1, 20),
+                    substr(p.cnpj, 1, 20)) cod_docum_padre, --13
+             SUBSTR(p.description, (INSTR(p.description, ' ')), 30) ape1_padre, --14
+             null ap2_padre, --15
+             DECODE(p.cnpj,
+                    null,
+                    SUBSTR(p.description, 1, 40),
+                    SUBSTR(p.description, 1, 80)) nom_padre, --16
+             DECODE(p.cnpj, null, 'S', 'N') mca_fisico, --17
+             null cod_profesion, --18
+             null nom_profesion, --19
+             null cod_coupacion, --20
+             null nom_ocupacion, --21
+             '1' cod_calidad, --22
+             'BOM' nom_calidad, --23
+             null cod_cgp_tercero, --24
+             null nom_grp_tercero, --25
+             null cod_pais, --26
+             null cod_postal, --27
+             null cod_estado, --28
+             null cod_prov, --29
+             null cod_localidad, --30
+             null nom_localidad, --31
+             null tip_domicilio, --32
+             null nom_domicilio1, --33
+             null nom_domicilio2, --34
+             null nom_domicilio3, --35
+             null num_apartado, --36
+             null tlf_pais, --37
+             substr(p.telefonecelularddd, 1, 5) tlf_zona, --38
+             substr(p.telefonecelularnumero, 1, 10) tlf_numero, --39
+             null fax_numero, --40
+             substr(p.email, 1, 40) email, --41
+             null cod_pais_com, --42
+             null cod_postal_com, --43
+             null cod_estado_com, --44
+             null cod_prov_com, --45
+             null cod_localidad_com, --46
+             null nom_localidad_com, --47
+             null tip_domicilio_com, --48
+             null nom_domicilio1_com, --49
+             null nom_domicilio2_com, --50
+             null nom_domicilio3_com, --51
+             null num_apartado_com, --52
+             null tlf_pais_com, --53
+             substr(p.telefonecomercialddd, 1, 5) tlf_zona_com, --54
+             substr(p.telefonecomercialnumero, 1, 10) tlf_numro_com, --55
+             null fax_numero_com, --56
+             substr(p.email, 1, 60) email_com, --57
+             null txt_etiquera1, --58
+             null txt_etiquera2, --59
+             null txt_etiquera3, --60
+             null txt_etiquera4, --61
+             null txt_etiquera5, --62
+             substr(p.telefonecomercialnumero, 1, 12) tlf_movl, --63
+             substr(p.sexo, 1, 1) mca_sexo, --64
+             substr(p.sexo, 1, 30) nom_sexo, --65
+             CASE p.estadocivil
+               WHEN 'C' THEN
+                'C'
+               WHEN 'CASADA' THEN
+                'C'
+               WHEN 'CASADA/CASADO' THEN
+                'C'
+               WHEN 'CASADO' THEN
+                'C'
+               WHEN 'CASADO/CASADA' THEN
+                'C'
+               WHEN 'DIVORCIADA' THEN
+                'D'
+               WHEN 'DIVORCIADO/DIVORCIADA' THEN
+                'D'
+               WHEN 'V' THEN
+                'V'
+               WHEN 'VIÚVA' THEN
+                'V'
+               WHEN 'VIUVO(A)' THEN
+                'V'
+               WHEN 'VIUVO/VIUVA' THEN
+                'V'
+               WHEN 'SOLTEIRO/SOLTEIRA' THEN
+                'S'
+               WHEN 'SOLTEIRO/SOLTEIRA' THEN
+                'S'
+               ELSE
+                'O'
+             END cod_estado_civil, --66
+             CASE p.estadocivil
+               WHEN 'C' THEN
+                'CASADO'
+               WHEN 'CASADA' THEN
+                'CASADO'
+               WHEN 'CASADA/CASADO' THEN
+                'CASADO'
+               WHEN 'CASADO' THEN
+                'CASADO'
+               WHEN 'CASADO/CASADA' THEN
+                'CASADO'
+               WHEN 'DIVORCIADA' THEN
+                'DIVORCIADO'
+               WHEN 'DIVORCIADO/DIVORCIADA' THEN
+                'DIVORCIADO'
+               WHEN 'V' THEN
+                'VIUVO'
+               WHEN 'VIÚVA' THEN
+                'VIUVO'
+               WHEN 'VIUVO(A)' THEN
+                'VIUVO'
+               WHEN 'VIUVO/VIUVA' THEN
+                'VIUVO'
+               WHEN 'SOLTEIRO/SOLTEIRA' THEN
+                'SOLTEIRO'
+               WHEN 'SOLTEIRO/SOLTEIRA' THEN
+                'SOLTEIRO'
+               ELSE
+                'OUTROS'
+             END nom_estado_civil, --67
+             p.datanascimento fec_nacimento, --68
+             substr(nac.codigo, 1, 3) cod_nacionalidad, --69
+             substr(nac.description, 1, 25) nom_nacionalidad, --70
+             null cod_ent_financiera, --71
+             null nom_entidad_financiera, --72
+             null cod_classe_benef, --73
+             null nom_classe_benef, --74
+             null cod_causa_inh, --75
+             null nom_causa_inh, --76
+             'N' mca_inh, --77
+             'S' mca_robinson, --78
+             null num_hijos, --79
+             null mca_rural_urbano, --80
+             null mca_empleado, --81
+             null id_sectorizacion, --82
+             null id_forma_pago, --83
+             null id_periodicidad_pago, --84
+             null num_dias_medio_mora, --85
+             null id_perfil_consumo, --86
+             null id_nivel_renta, --87
+             null id_fuente_prod_mayor_contrata, --88
+             null id_ultima_fuente_prod_contrata, --89
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusão, --90
+             0 status_processo_corebi, --91
+             null data_processo_corebi, --92
+             p.id id_chave_pessoa_prop -- auxilio de recuperacao na tabela de endereço
+        FROM pessoa p, nacionalidade nac
+       WHERE p.nacionalidade_id = nac.id(+)
+         and p.cpf not in (select a2.cod_docum
+                             from A1009426_VCR a2
+                            where a2.cod_docum = p.cpf);
+  
+  BEGIN
+    --
+    l_conta_insert := 0;
+  
+    OPEN l_cur_cliente;
+    --
+    LOOP
+      --
+      Begin
+        Fetch l_cur_cliente
+          Into l_reg_cli;
+      Exception
+        when others then
+          null;
+      End;
+      --
+      IF l_cur_cliente%FOUND THEN
+        l_conta_insert := nvl(l_conta_insert, 0) + 1;
+      
+        BEGIN
+          select e.enderecocorrespondencia_id
+            into l_chave_end
+            from pessoaproposta e
+           where e.pessoa_id = l_reg_cli.id_chave_pessoa_prop
+             and rownum = 1;
+        EXCEPTION
+          WHEN OTHERS THEN
+            l_chave_end := null;
+        END;
+        --
+        IF l_chave_end is not null THEN
+          BEGIN
+            select to_number(substr(e.cep, 1, 15)),
+                   substr(e.bairro, 1, 25),
+                   substr(e.logradouro, 1, 40),
+                   to_number(substr(e.cep, 1, 15)),
+                   substr(e.bairro, 1, 25),
+                   substr(e.logradouro, 1, 60)
+              into l_reg_cli.cod_postal,
+                   l_reg_cli.nom_localidad,
+                   l_reg_cli.nom_domicilio1,
+                   l_reg_cli.cod_postal_com,
+                   l_reg_cli.nom_localidad_com,
+                   l_reg_cli.nom_domicilio1_com
+              from endereco e
+             where e.id = l_chave_end;
+          EXCEPTION
+            WHEN OTHERS THEN
+              l_reg_cli.cod_postal         := null;
+              l_reg_cli.nom_localidad      := null;
+              l_reg_cli.nom_domicilio1     := null;
+              l_reg_cli.cod_postal_com     := null;
+              l_reg_cli.nom_localidad_com  := null;
+              l_reg_cli.nom_domicilio1_com := null;
+          END;
+        END IF;
+      
+        BEGIN
+          INSERT INTO A1009426_vcr
+          VALUES
+            (l_reg_cli.ts_inclusao,
+             l_reg_cli.ts_alteracao,
+             l_reg_cli.cd_usuario_inclusao,
+             l_reg_cli.cd_usuario_alteracao,
+             l_reg_cli.cod_cia_legado, --01
+             l_reg_cli.cod_cia_cnpj, --02
+             l_reg_cli.cod_sistema_legado, --03
+             l_reg_cli.cod_sistema_cnpj, --04
+             l_reg_cli.tip_docum, --05
+             l_reg_cli.nom_tip_docum, --06
+             l_reg_cli.cod_docum, --07
+             l_reg_cli.cod_act_tercero, --08
+             l_reg_cli.ape1_tercero, --09
+             l_reg_cli.ape2_tercero, --10
+             l_reg_cli.nom_tercero, --11
+             l_reg_cli.tip_docum_PADRE, --12
+             l_reg_cli.cod_docum_padre, --13
+             l_reg_cli.ape1_padre, --14
+             l_reg_cli.ape2_padre, --15
+             l_reg_cli.nom_padre, --16
+             l_reg_cli.mca_fisico, --17
+             l_reg_cli.cod_profesion, --18
+             l_reg_cli.nom_profesion, --19
+             l_reg_cli.cod_ocupacion, --20
+             l_reg_cli.nom_ocupacion, --21
+             l_reg_cli.cod_calidad, --22
+             l_reg_cli.nom_calidad, --23
+             l_reg_cli.cod_grp_tercero, --24
+             l_reg_cli.nom_grp_tercero, --25
+             l_reg_cli.cod_pais, --26        --- verificar
+             l_reg_cli.cod_postal, --27
+             l_reg_cli.cod_estado, --28        --verificar
+             l_reg_cli.cod_prov, --29        --verificar
+             l_reg_cli.cod_localidad, --30        --verificar
+             l_reg_cli.nom_localidad, --31
+             l_reg_cli.tip_domicilio, --32        --verificar
+             l_reg_cli.nom_domicilio1, --33
+             l_reg_cli.nom_domicilio2, --34
+             l_reg_cli.nom_domicilio3, --35
+             l_reg_cli.num_apartado, --36
+             l_reg_cli.tlf_pais, --37
+             l_reg_cli.tlf_zona, --38
+             l_reg_cli.tlf_numero, --39
+             l_reg_cli.fax_numero, --40
+             l_reg_cli.email, --41
+             l_reg_cli.cod_pais_com, --42
+             l_reg_cli.cod_postal_com, --43
+             l_reg_cli.cod_estado_com, --44
+             l_reg_cli.cod_prov_com, --45
+             l_reg_cli.cod_localidad_com, --46
+             l_reg_cli.nom_localidad_com, --47
+             l_reg_cli.tip_domicilio_com, --48
+             l_reg_cli.nom_domicilio1_com, --49
+             l_reg_cli.nom_domicilio2_com, --50
+             l_reg_cli.nom_domicilio3_com, --51
+             l_reg_cli.num_apartado_com, --52
+             l_reg_cli.tlf_pais_com, --53
+             l_reg_cli.tlf_zona_com, --54
+             l_reg_cli.tlf_numero_com, --55
+             l_reg_cli.fax_numero_com, --56
+             l_reg_cli.email_com, --57
+             l_reg_cli.txt_etiqueta1, --58
+             l_reg_cli.txt_etiqueta2, --59
+             l_reg_cli.txt_etiqueta3, --60
+             l_reg_cli.txt_etiqueta4, --61
+             l_reg_cli.txt_etiqueta5, --62
+             l_reg_cli.tlf_movil, --63
+             l_reg_cli.mca_sexo, --64
+             l_reg_cli.nom_sexo, --65
+             l_reg_cli.cod_estado_civil, --66
+             l_reg_cli.nom_estado_civil, --67
+             l_reg_cli.fec_nacimiento, --68
+             l_reg_cli.cod_nacionalidad, --69
+             l_reg_cli.nom_nacionalidad, --70
+             l_reg_cli.cod_entidad_financiera, --71
+             l_reg_cli.nom_entidad_financiera, --72
+             l_reg_cli.cod_clase_benef, --73
+             l_reg_cli.nom_clase_benef, --74
+             l_reg_cli.cod_causa_inh, --75
+             l_reg_cli.nom_causa_inh, --76
+             l_reg_cli.mca_inh, --77
+             l_reg_cli.mca_robinson, --78
+             l_reg_cli.num_hijos, --79
+             l_reg_cli.mca_rural_urbano, --80
+             l_reg_cli.mca_empleado, --81   -- verificar
+             l_reg_cli.id_sectorizacion, --82
+             l_reg_cli.id_forma_pago, --83
+             l_reg_cli.id_periodicidad_pago, --84
+             l_reg_cli.num_dias_medio_mora, --85
+             l_reg_cli.id_perfil_consumo, --86
+             l_reg_cli.id_nivel_renta, --87
+             l_reg_cli.id_fuente_prod_mayor_contrata, --88
+             l_reg_cli.id_ultima_fuente_prod_contrata, --89
+             l_reg_cli.data_inclusao, --90
+             l_reg_cli.status_processo_corebi, --91
+             l_reg_cli.data_processo_corebi, --92
+             l_reg_cli.id_chave_pessoa_prop);
+        
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL;
+        END;
+        COMMIT;
+      END IF;
+      EXIT WHEN l_cur_cliente%NOTFOUND;
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_cliente;
+    dbms_output.put_line('Carga concluída com sucesso. ' ||
+                         to_char(l_conta_insert) || ' clientes gravados ');
+  END p_carrega_cliente;
+  ----------------------------------------------------------------------------------------------------------------------------
+  PROCEDURE p_carrega_benef_tercero IS
+    /*------------------------------------------------------------------+
+    | Carga de Beneficiario Tercero
+    +-------------------------------------------------------------------+
+    */
+    CURSOR l_cur_tercero IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao,
+             null ts_alteracao,
+             user cd_usuario_inclusao,
+             null cd_usuario_alteracao,
+             60 cod_cia_legado, --01
+             '20' cod_cia_cnpj, --02
+             58 codigo_sistema_legado, --03
+             '58' cod_sistema_cnpj, --04
+             0 cod_act_tercero, --05
+             DECODE(p.cnpj, null, 'CPF', 'CGC') tip_docum, --06
+             DECODE(p.cnpj,
+                    null,
+                    'CADASTRO NACIONAL P.FISICA',
+                    'CADASTRO NACIONAL P.JURIDICA') nom_tip_docum, --07
+             DECODE(p.cnpj,
+                    null,
+                    substr(p.cpf, 1, 30),
+                    substr(p.cnpj, 1, 30)) cod_docum, --08
+             DECODE(p.cnpj, null, 'S', 'N') mca_fisico, --09
+             SUBSTR(p.description, (INSTR(p.description, ' ')), 25) ape1_tercero, --10
+             null ape1_tercero, --11
+             DECODE(p.cnpj,
+                    null,
+                    SUBSTR(p.description, 1, 40),
+                    SUBSTR(p.description, 1, 80)) nom_tercero, --12
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusão, --13
+             0 status_processo_corebi, --14
+             null data_processo_corebi --15
+        FROM beneficiarioocorrenciaesc b, pessoa p
+       where b.pessoa_id = p.id
+         and p.cpf not in (select a2.cod_docum
+                             from A1009427_VCR a2
+                            where a2.cod_docum = p.cpf);
+  
+    TYPE TYPTAB_TMP_TERCERO IS TABLE OF A1009427_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_TERCERO;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+    --
+  BEGIN
+  
+    IF l_cur_tercero%ISOPEN THEN
+      CLOSE l_cur_tercero;
+    END IF;
+    --
+    OPEN l_cur_tercero;
+    --
+    LOOP
+      --
+      FETCH l_cur_tercero BULK COLLECT
+        INTO l_lista_select LIMIT 5000;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009427_VCR VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          /*
+          v_BULK_ERRCOUNT := SQL%BULK_EXCEPTIONS.COUNT;
+          FOR J IN 1.. v_BULK_ERRCOUNT
+            LOOP
+              v_ARRAY_POS := SQL%BULK_EXCEPTIONS(J).ERROR_INDEX;
+              --DBMS_OUTPUT.PUT_LINE('ERRO PROCESSAMENTO - SINISTRO: '|| NUM_SINI(v_ARRAY_POS).NUM_SINI || ' MENSAGEM ERRO: ' || SQLERRM( -SQL%BULK_EXCEPTIONS(J).ERROR_CODE));
+               DBMS_OUTPUT.PUT_LINE('ERRO PROCESSAMENTO  '|| ' MENSAGEM ERRO: ' || SQLERRM( -SQL%BULK_EXCEPTIONS(J).ERROR_CODE));
+            END LOOP;
+          */
+          NULL;
+      END;
+    
+      COMMIT;
+    
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_tercero;
+  
+  End p_carrega_benef_tercero;
+
+  ----------------------------------------------------------------------------------------------------------------------------
+  PROCEDURE p_carrega_usuario IS
+    /*------------------------------------------------------------------+
+    | Carga de Usuários
+    +-------------------------------------------------------------------+
+    */
+    CURSOR l_cur_usuarios IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao,
+             null ts_alteracao,
+             user cd_usuario_inclusao,
+             null cd_usuario_alteracao,
+             60 cod_cia_legado, --01
+             '20' cod_cia_cnpj, --02
+             58 codigo_sistema_legado, --03
+             '58' cod_sistema_cnpj, --04
+             CASE
+               WHEN LENGTH(userlogin) <= 20 THEN
+                userlogin
+               WHEN LENGTH(userlogin) > 20 THEN
+                substr(name, 1, 60)
+             END cod_usr_cia, --05
+             substr(name, 1, 60) nom_usr_cia, --06
+             null cod_nivel3, --07
+             null cod_agt, --08
+             substr(email, 1, 60) email_usr_cia, --09
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusao, --10
+             0 status_processo_corebi, --11
+             null data_processo_corebi
+        FROM USERSYSTEM u
+       where u.userlogin not in
+             (Select cod_usr_cia
+                from A1009428_VCR
+               where cod_usr_cia = u.userlogin
+                  or cod_usr_cia = u.name)
+      UNION ALL
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao,
+             null ts_alteracao,
+             user cd_usuario_inclusao,
+             null cd_usuario_alteracao,
+             60 cod_cia_legado, --01
+             '20' cod_cia_cnpj, --02
+             58 codigo_sistema_legado, --03
+             '58' cod_sistema_cnpj, --04
+             'USER_BO' nom_usr_cia, --05
+             'USUARIO PROCESSO SAP', --06
+             null cod_nivel3, --07
+             null cod_agt, --08
+             NULL, --09
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusao, --10
+             0 status_processo_corebi, --11
+             null data_processo_corebi
+        FROM DUAL;
+  
+    TYPE TYPTAB_TMP_USU IS TABLE OF A1009428_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_USU;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+  
+    --
+  BEGIN
+  
+    IF l_cur_usuarios%ISOPEN THEN
+      CLOSE l_cur_usuarios;
+    END IF;
+    --
+    OPEN l_cur_usuarios;
+    --
+    LOOP
+      --
+      FETCH l_cur_usuarios BULK COLLECT
+        INTO l_lista_select LIMIT 5000;
+      --
+      EXIT WHEN l_lista_select.COUNT = 0;
+      --
+      BEGIN
+        FORALL I IN 1 .. l_lista_select.COUNT SAVE EXCEPTIONS
+          INSERT INTO A1009428_VCR VALUES l_lista_select (I);
+      EXCEPTION
+        WHEN GPO_BULK_EXC THEN
+          NULL;
+      END;
+    
+      COMMIT;
+    
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_usuarios;
+  End p_carrega_usuario;
+
+  --
+  PROCEDURE p_carrega_tramitador IS
+    /*------------------------------------------------------------------+
+    | Carga de Tramitador
+    +-------------------------------------------------------------------+
+    */
+  
+    l_reg_tramit   A7009424_VCR%ROWTYPE;
+    l_conta_insert NUMBER;
+    l_erro_oracle  VARCHAR2(1000);
+    l_erro_pk      VARCHAR2(300);
+  
+    CURSOR l_cur_tramitador IS
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao, --01
+             null ts_alteracao, --02
+             user cd_usuario_inclusao, --03
+             null cd_usuario_alteracao, --04
+             60 cod_cia_legado, --05
+             '20' cod_cia_cnpj, --06
+             58 codigo_sistema_legado, --07
+             '58' cod_sistema_cnpj, --08
+             'CPF' tip_docum_tramitador, --09
+             'CADASTRO NACIONAL P.FISICA' nom_docum_tramitador, --10
+             '_' cod_docum_tramitador, --11                           **** pessoa
+             '_' cod_tramitador, --12                                 **** pessoa
+             'T' tip_tramitador, --13
+             9995 cod_nivel3_tramitador, --14
+             '9995' nom_nivel3, --15
+             null cod_centro_tramitacion, --16
+             null nom_centro_tramitacion, --17
+             substr(us.userlogin, 1, 20) cod_usr_tramitador, --18    *** verificar o resultado
+             substr(us.name, 1, 30) ape1_tramitador, --19    *** verificar o resultado
+             null ape2_tramitador, --20
+             substr(us.name, 1, 30) nom_tramitador, --21
+             'A' tip_estado, --22
+             null max_num_exp, --23
+             'N' mca_inh_trammitador, --24
+             null cod_causa_inh_tramitador, --25
+             null nom_causa_inh_tramitador, --26
+             null tip_docum_supervisor, --27
+             null nom_docum_supervisor, --28
+             null cod_docum_supervisor, --29
+             null cod_supervisor, --30
+             null cod_nivel3_supervisor, --31
+             null cod_usr_supervisor, --32
+             null ape1_supervisor, --33
+             null ape2_supervisor, --34
+             null nom_supervisor, --35
+             null mca_inh_supervisor, --36
+             null cod_causa_inh_supervisor, --37
+             null nom_causa_inh_supervisorm, --38
+             null cod_pais_tramitador, --39
+             null cod_postal_tramitador, --40
+             null cod_estado_tramitador, --41
+             null cod_prov_tramitador, --42
+             null cod_localidad_tramitador, --43
+             null nom_localidad_tramitador, --44
+             null tip_domicilio_tramitador, --45
+             null nom_domicilio1_tramitador, --46
+             null nom_domicilio2_tramitador, --47
+             null nom_domicilio3_tramitador, --48
+             null tlf_pais_tramitador, --49
+             null tlf_zona_tramitador, --50
+             null tlf_numero_tramitador, --51
+             null tlf_extension_tramitador, --52
+             null fax_tramitador, --53
+             substr(us.email, 1, 60) email_tramitador, --54
+             null cod_pais_supervisor, --55
+             null cod_postal_supervisor, --56
+             null cod_estado_supervisor, --57
+             null cod_prov_supervisor, --58
+             null cod_localidad_supervisor, --59
+             null nom_localidad_supervisor, --60
+             null tip_domicilio_supervisor, --61
+             null nom_domicilio1_supervisor, --62
+             null nom_domicilio2_supervisor, --63
+             null nom_domicilio3_supervisor, --64
+             null tlc_pais_supervisor, --65
+             null tlf_zona_supervisor, --66
+             null tlf_numero_supervisor, --67
+             null tlf_extension_supervisor, --68
+             null fax_supervisor, --69
+             null email_supervisor, --70
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusao, --71
+             0 status_processo_corebi, --72
+             null data_processo_corebi --73
+        FROM (select distinct userowner_id
+                from ocorreventosinistrocoberto
+               where userowner_id is not null) oc,
+             --v_mvp_ocorrenciasinistro oc,
+             usersystem us
+       WHERE oc.userowner_id = us.id
+         AND substr(us.userlogin, 1, 20) not in
+             (select cod_usr_tramitador
+                from A7009424_VCR
+               where cod_usr_tramitador = substr(us.userlogin, 1, 20));
+    --
+  BEGIN
+  
+    l_conta_insert := 0;
+  
+    OPEN l_cur_tramitador;
+    --
+    LOOP
+      --
+      Begin
+        Fetch l_cur_tramitador
+          Into l_reg_tramit;
+      Exception
+        when others then
+          null;
+      End;
+      --
+      IF l_cur_tramitador%FOUND THEN
+        l_conta_insert := nvl(l_conta_insert, 0) + 1;
+      
+        BEGIN
+          INSERT INTO A7009424_vcr
+          VALUES
+            (l_reg_tramit.ts_inclusao, --01
+             l_reg_tramit.ts_alteracao, --02
+             l_reg_tramit.cd_usuario_inclusao, --03
+             l_reg_tramit.cd_usuario_alteracao, --04
+             l_reg_tramit.COD_CIA_LEGADO, --05
+             l_reg_tramit.COD_CIA_CNPJ, --06
+             l_reg_tramit.COD_SISTEMA_LEGADO, --07
+             l_reg_tramit.COD_SISTEMA_CNPJ, --08
+             l_reg_tramit.TIP_DOCUM_TRAMITADOR, --09
+             l_reg_tramit.NOM_DOCUM_TRAMITADOR, --10
+             l_reg_tramit.COD_DOCUM_TRAMITADOR, --11
+             l_reg_tramit.COD_TRAMITADOR, --12   
+             l_reg_tramit.TIP_TRAMITADOR, --13
+             l_reg_tramit.COD_NIVEL3_TRAMITADOR, --14
+             l_reg_tramit.NOM_NIVEL3, --15
+             l_reg_tramit.COD_CENTRO_TRAMITACION, --16
+             l_reg_tramit.NOM_CENTRO_TRAMITACION, --17  
+             l_reg_tramit.COD_USR_TRAMITADOR, --18
+             l_reg_tramit.APE1_TRAMITADOR, --19
+             l_reg_tramit.APE2_TRAMITADOR, --20
+             l_reg_tramit.NOM_TRAMITADOR, --21
+             l_reg_tramit.TIP_ESTADO, --22
+             l_reg_tramit.MAX_NUM_EXP, --23
+             l_reg_tramit.MCA_INH_TRAMITADOR, --24
+             l_reg_tramit.COD_CAUSA_INH_TRAMITADOR, --25
+             l_reg_tramit.NOM_CAUSA_INH_TRAMITADOR, --26
+             l_reg_tramit.TIP_DOCUM_SUPERVISOR, --27
+             l_reg_tramit.NOM_DOCUM_SUPERVISOR, --28
+             l_reg_tramit.COD_DOCUM_SUPERVISOR, --29
+             l_reg_tramit.COD_SUPERVISOR, --30
+             l_reg_tramit.cod_nivel3_supervisor, --31
+             l_reg_tramit.COD_USR_SUPERVISOR, --32
+             l_reg_tramit.APE1_SUPERVISOR, --33
+             l_reg_tramit.APE2_SUPERVISOR, --34
+             l_reg_tramit.NOM_SUPERVISOR, --35
+             l_reg_tramit.MCA_INH_SUPERVISOR, --36
+             l_reg_tramit.COD_CAUSA_INH_SUPERVISOR, --37
+             l_reg_tramit.NOM_CAUSA_INH_SUPERVISOR, --38
+             l_reg_tramit.COD_PAIS_TRAMITADOR, --39
+             l_reg_tramit.COD_POSTAL_TRAMITADOR, --40
+             l_reg_tramit.COD_ESTADO_TRAMITADOR, --41
+             l_reg_tramit.COD_PROV_TRAMITADOR, --42
+             l_reg_tramit.COD_LOCALIDAD_TRAMITADOR, --43
+             l_reg_tramit.NOM_LOCALIDAD_TRAMITADOR, --44
+             l_reg_tramit.TIP_DOMICILIO_TRAMITADOR, --45
+             l_reg_tramit.NOM_DOMICILIO1_TRAMITADOR, --46
+             l_reg_tramit.NOM_DOMICILIO2_TRAMITADOR, --47
+             l_reg_tramit.NOM_DOMICILIO3_TRAMITADOR, --48
+             l_reg_tramit.TLF_PAIS_TRAMITADOR, --49
+             l_reg_tramit.TLF_ZONA_TRAMITADOR, --50
+             l_reg_tramit.TLF_NUMERO_TRAMITADOR, --51
+             l_reg_tramit.TLF_EXTENSION_TRAMITADOR, --52
+             l_reg_tramit.FAX_TRAMITADOR, --53
+             l_reg_tramit.EMAIL_TRAMITADOR, --54
+             l_reg_tramit.COD_PAIS_SUPERVISOR, --55
+             l_reg_tramit.COD_POSTAL_SUPERVISOR, --56
+             l_reg_tramit.COD_ESTADO_SUPERVISOR, --57
+             l_reg_tramit.COD_PROV_SUPERVISOR, --58
+             l_reg_tramit.COD_LOCALIDAD_SUPERVISOR, --59
+             l_reg_tramit.NOM_LOCALIDAD_SUPERVISOR, --60
+             l_reg_tramit.TIP_DOMICILIO_SUPERVISOR, --61
+             l_reg_tramit.NOM_DOMICILIO1_SUPERVISOR, --62
+             l_reg_tramit.NOM_DOMICILIO2_SUPERVISOR, --63
+             l_reg_tramit.NOM_DOMICILIO3_SUPERVISOR, --64
+             l_reg_tramit.TLF_PAIS_SUPERVISOR, --65
+             l_reg_tramit.TLF_ZONA_SUPERVISOR, --66
+             l_reg_tramit.TLF_NUMERO_SUPERVISOR, --67
+             l_reg_tramit.TLF_EXTENSION_SUPERVISOR, --68
+             l_reg_tramit.FAX_SUPERVISOR, --69
+             l_reg_tramit.EMAIL_SUPERVISOR, --70
+             l_reg_tramit.DATA_INCLUSAO, --71
+             l_reg_tramit.STATUS_PROCESSO_COREBI, --72
+             l_reg_tramit.DATA_PROCESSO_COREBI --73
+             );
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL;
+        END;
+        COMMIT;
+      END IF;
+      EXIT WHEN l_cur_tramitador%NOTFOUND;
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_tramitador;
+    dbms_output.put_line('Carga concluída com sucesso. ' ||
+                         to_char(l_conta_insert) || ' Usuários gravados ');
+  
+  End p_carrega_tramitador;
+  ----------------------------------------------------------------------------------------------------------------------
+
+  PROCEDURE p_carrega_riscos_vigentes IS
+    /*------------------------------------------------------------------+
+    | Carga de Riscos Vigentes
+    +-------------------------------------------------------------------+
+    */
+    --   l_reg_riscos    A2009424_ATU_VCR%ROWTYPE;
+    l_reg_riscos   A2009424_VCR%ROWTYPE;
+    l_conta_insert NUMBER;
+    l_erro_oracle  VARCHAR2(1000);
+    l_erro_pk      VARCHAR2(300);
+    l_periodo_mes  NUMBER;
+  
+    CURSOR l_cur_riscos IS
+    
+      SELECT to_char(sysdate, 'dd/mm/yyyy') ts_inclusao,
+             null ts_alteracao,
+             user cd_usuario_inclusao,
+             null cd_usuario_alteracao,
+             60 cod_cia_legado, --01
+             '20' cod_cia_cnpj, --02
+             58 codigo_sistema_legado, --03
+             '58' cod_sistema_cnpj, --04
+             TO_NUMBER(tcc.cod_ramo) cod_ramo, --05
+             TO_NUMBER(tcc.cod_ramo) tip_produto, --06
+             tcc.cod_apolice num_poliza, --07
+             0 num_apli, --08
+             DECODE(SUBSTR(tcc.num_endosso, 1, 1), 'C', '999000') ||
+             nvl(substr(tcc.num_endosso, 2, 10), 0) num_spto, --09             
+             --tcc.num_endosso num_spto, --09
+             0 num_spto_apli, --10
+             1 num_riesgo, --11
+             9995 cod_nivel3, --12
+             ms.cd_agente cod_agt, --13
+             null cod_asesor, --14
+             null tip_docum_asesor, --15
+             null cod_docum_asesor, --16
+             decode(ms.tp_pessoa, 'F', 'CPF', 'CGC') tip_docum_tomador, --17
+             ms.cd_documento cod_docum_tomador, --18
+             SUBSTR(NVL(to_char(ms.cd_usuario), '12345678'), 1, 20) cod_usr, --19
+             0 num_renovaciones, --20
+             1 tip_duracion, --21
+             1 cod_forma_pago, --22
+             0 tip_coaseguro, --23
+             'F' tipo_poliza_tr, --24      
+             null cod_canal_distribucion, --25
+             null cod_canal3, --26
+             'I' tip_poliza, --27
+             ms.dt_emissao_contrato fec_emision, --28
+             ms.dt_inicio_endosso fec_efec_poliza, --29
+             ms.dt_fim_endosso fec_vcto_poliza, --30
+             ms.dt_inicio_endosso fec_efec_spto, --31
+             ms.dt_fim_endosso fec_vcto_spto, --32
+             ms.dt_inicio_endosso fec_efec_riesgo, --33
+             ms.dt_fim_endosso fec_vcto_riesgo, --34
+             1 cod_mon, --35
+             1 cod_mon_local, --36
+             tcc.val_premio_emitido imp_prima_spto, --37
+             tcc.val_iof imp_costo_spto, --38  -- VALIDAR COM RENATO/PATCIC
+             0 imp_recargo_spto, --39
+             0 imp_desc_spto, --40
+             0 imp_impuesto_spto, --41
+             tcc.val_comissao_corretagem imp_comis_neta_spto, --42  
+             0 cod_moneda_suma_assegurada, --43
+             tcc.val_mov_is imp_suma_asegurada_spto, --44
+             100 pct_retenido, --45
+             0 pct_cedido, --46
+             1 num_riesgos, --47
+             to_char(sysdate, 'dd/mm/yyyy') data_inclusao, --48
+             0 status_processo_corebi, --49
+             null data_processo_corebi, --50
+             to_number(substr(tcc.cod_ramo, 1, 4)) cod_setor --51
+        FROM emissao_aberta_por_cobertura_tb tcc, --temp_mvp_com_cobertura tcc,
+             Mvp_Sap_Fi0026_Envio_Parc       ms
+       WHERE tcc.Mvp_Sap_Fi0026_Id = ms.id
+         and tcc.dt_fim_vigencia > to_date('31/01/2021', 'dd/mm/yyyy');
+  
+    --
+    --  BEGIN
+    --
+    --    l_conta_insert := 0;
+  
+    TYPE TYPTAB_TMP_RISCOS IS TABLE OF A2009424_VCR%ROWTYPE INDEX BY PLS_INTEGER;
+  
+    l_lista_select TYPTAB_TMP_RISCOS;
+  
+    GPO_BULK_EXC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(GPO_BULK_EXC, -24381);
+    v_BULK_ERRCOUNT NUMBER(2);
+    v_ARRAY_POS     NUMBER(10);
+    vw_num_spto     NUMBER(5);
+  
+    --
+  BEGIN
+  
+    OPEN l_cur_riscos;
+    --
+    LOOP
+      --
+      Begin
+        Fetch l_cur_riscos
+          Into l_reg_riscos;
+      Exception
+        when others then
+          null;
+      End;
+      --
+      IF l_cur_riscos%FOUND THEN
+        l_conta_insert := nvl(l_conta_insert, 0) + 1;
+      
+        BEGIN
+          Begin
+            vw_num_spto := to_number(l_reg_riscos.num_spto);
+          exception
+            when others then
+              vw_num_spto := 0;
+          end;
+        
+          INSERT INTO A2009424_VCR
+          VALUES
+            (l_reg_riscos.ts_inclusao,
+             l_reg_riscos.ts_alteracao,
+             l_reg_riscos.cd_usuario_inclusao,
+             l_reg_riscos.cd_usuario_alteracao,
+             l_reg_riscos.cod_cia_legado, --01
+             l_reg_riscos.cod_cia_cnpj, --02
+             l_reg_riscos.cod_sistema_legado, --03
+             l_reg_riscos.cod_sistema_cnpj, --04
+             l_reg_riscos.cod_ramo, --05
+             l_reg_riscos.tip_produto, --06
+             l_reg_riscos.num_poliza, --07
+             l_reg_riscos.num_apli, --08
+             vw_num_spto,
+             l_reg_riscos.num_spto_apli, --10
+             l_reg_riscos.num_riesgo, --11
+             l_reg_riscos.cod_nivel3, --12
+             l_reg_riscos.cod_agt, --13
+             l_reg_riscos.cod_asesor, --14
+             l_reg_riscos.tip_docum_asesor, --15
+             l_reg_riscos.cod_docum_asesor, --16
+             l_reg_riscos.tip_docum_tomador, --17
+             l_reg_riscos.cod_docum_tomador, --18
+             l_reg_riscos.cod_usr, --19
+             l_reg_riscos.num_renovaciones, --20
+             l_reg_riscos.tip_duracion, --21
+             l_reg_riscos.cod_forma_pago, --22
+             l_reg_riscos.tip_coaseguro, --23
+             l_reg_riscos.tipo_poliza_tr, --24
+             l_reg_riscos.cod_canal_distribucion, --25
+             l_reg_riscos.cod_canal3, --26
+             l_reg_riscos.tip_poliza, --27
+             l_reg_riscos.fec_emision, --28
+             l_reg_riscos.fec_efec_poliza, --29
+             l_reg_riscos.fec_vcto_poliza, --30
+             l_reg_riscos.fec_efec_spto, --31
+             l_reg_riscos.fec_vcto_spto, --32
+             l_reg_riscos.fec_efec_riesgo, --33
+             l_reg_riscos.fec_vcto_riesgo, --34
+             l_reg_riscos.cod_mon, --35
+             l_reg_riscos.cod_mon_local, --36
+             l_reg_riscos.imp_prima_spto, --37
+             l_reg_riscos.imp_costo_spto, --38
+             l_reg_riscos.imp_recargo_spto, --39
+             l_reg_riscos.imp_desc_spto, --40
+             l_reg_riscos.imp_impuesto_spto, --41
+             l_reg_riscos.imp_comis_neta_spto, --42
+             l_reg_riscos.cod_moneda_suma_asegurada, --43
+             l_reg_riscos.imp_suma_asegurada_spto, --44
+             l_reg_riscos.pct_retenido, --45
+             l_reg_riscos.pct_cedido, --46
+             l_reg_riscos.num_riesgos, --47
+             l_reg_riscos.data_inclusao, --48
+             l_reg_riscos.status_processo_corebi, --49
+             l_reg_riscos.data_processo_corebi, --50
+             l_reg_riscos.cod_sector); --51
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL;
+        END;
+      
+        COMMIT;
+      END IF;
+      EXIT WHEN l_cur_riscos%NOTFOUND;
+      --
+    END LOOP;
+    --
+    CLOSE l_cur_riscos;
+    dbms_output.put_line('Carga concluída com sucesso. ' ||
+                         to_char(l_conta_insert) ||
+                         ' riscos_vigentes gravados ');
+  
+  End p_carrega_riscos_vigentes;
+
+  PROCEDURE p_execute_processo_cad is
+    vw_erro_exec VARCHAR2(10);
+  BEGIN
+  
+    -- 1º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_PRODUTO',
+         'Carga de produtos',
+         1,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para primeira execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_produto;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para primeira execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_PRODUTO'
+         AND ORDEM_EXECUCAO = 1
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    
+    END IF;
+  
+    -- 2º 
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_COBERTURA',
+         'Carga de coberturas',
+         2,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para a segunda execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_cobertura;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para primeira execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_COBERTURA'
+         AND ORDEM_EXECUCAO = 2
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    
+    END IF;
+  
+    -- 3º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_MODALIDADE',
+         'Carga de modalidades',
+         3,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para terceira execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_modalidade;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para terceira execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+  
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_MODALIDADE'
+         AND ORDEM_EXECUCAO = 3
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    -- 4º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_RAMOCONTABIL',
+         'Carga de ramo contabil',
+         4,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para quarta execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_ramocontabil;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para quarta execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_RAMOCONTABIL'
+         AND ORDEM_EXECUCAO = 4
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    -- 5º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_CLIENTE',
+         'Carga de clientes',
+         5,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para quinta execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_cliente;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para quarta execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_CLIENTE'
+         AND ORDEM_EXECUCAO = 5
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    -- 6º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_BENEF_TERCERO',
+         'Carga de beneficiarios terceiros',
+         6,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para sexta execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_benef_tercero;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para sexta execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_BENEF_TERCERO'
+         AND ORDEM_EXECUCAO = 6
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    --7º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_USUARIO',
+         'Carga de usuários',
+         7,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para sétima execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_usuario;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para sétima execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_USUARIO'
+         AND ORDEM_EXECUCAO = 7
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    --8º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_TRAMITADOR',
+         'Carga de tramitador',
+         8,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para oitava execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_tramitador;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para oitava execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_TRAMITADOR'
+         AND ORDEM_EXECUCAO = 8
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    --9º
+    BEGIN
+      INSERT INTO LOG_EXEC_IFR17_COREBI_VCR
+      VALUES
+        ('P_CARREGA_RISCOS_VIGENTES',
+         'Carga de riscos vigentes',
+         9,
+         USER,
+         SYSDATE,
+         NULL,
+         NULL);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para nona execução. Erro: ' ||
+                             SQLERRM);
+    END;
+    --
+    COMMIT;
+    --
+    VW_ERRO_EXEC := NULL;
+    BEGIN
+      p_carrega_riscos_vigentes;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.put_line('Erro no insert da tabela de log para nona execução. Erro: ' ||
+                             SQLERRM);
+        VW_ERRO_EXEC := 'ERRO';
+    END;
+    --
+    IF VW_ERRO_EXEC IS NULL THEN
+      UPDATE LOG_EXEC_IFR17_COREBI_VCR
+         SET DATA_FIM = SYSDATE, STATUS = 'CONCLUÍDO'
+       WHERE NOME_OBJETO = 'P_CARREGA_RISCOS_VIGENTES'
+         AND ORDEM_EXECUCAO = 9
+         AND TRUNC(DATA_INICIO) = TRUNC(SYSDATE);
+      COMMIT;
+    END IF;
+  
+    -- EXECUTE IMMEDIATE 'truncate table temp_mvp_sem_cobertura';
+  
+  END;
+
+END PKG_MVP_COMPL_IFRS17_BI;
+/

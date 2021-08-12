@@ -1,0 +1,34 @@
+Comandos github
+
+1. Função de criar um projeto só se faz uma vez(por projeto)
+   
+   1.1 Criar o repositorio no git 
+   1.2 git status - vefica qual a situação dele
+   1.3 Ter os arquivos que queremos subir
+   1.4 Ir para o diretorio principal do projeto
+   1.5 git init  - inicia o repositorio
+   1.6 git add nome_arquivo
+   1.7 git commit -m "nome da mensagem" será apresentada no site do github
+   1.8 git branch -M master  - criando uma branch mestre
+   1.9 git remote add origin git@github.com/cleber-almeida-souza/curso_git_1.git
+           sincronizando meu computador com o github
+   1.10 git push -u origin master
+   1.11 Nesta hora dando um f5 na pagina vamos ver o meu repositorio atualizado
+   
+   Observações: caso haja algum problema deveremos remover origin
+                atual e deveremos fazer a troca:
+				. pegar a nova url
+				  click no https da tela de criacao do repositorio e pegar   
+				  o link que esta na pagina
+				. Comandos:
+				  git remote -v que vai mostrar a origem atual
+				  git remote rm origin (para retirar a origem cadastrada com erro)
+				  git remote  ( nao deve mostrar mais as origens )
+                  git remote add origin https://github.com//meu_nome_no_gith/nome_repositorio
+				  
+2. Adicionando um arquivo ao git 
+   git add nome_arquivo
+3. Adicionando todos os arquivos de um diretorio ao git
+   git add .
+4.    
+   
