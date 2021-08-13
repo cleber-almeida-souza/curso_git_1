@@ -26,9 +26,39 @@ Comandos github
 				  git remote  ( nao deve mostrar mais as origens )
                   git remote add origin https://github.com//meu_nome_no_gith/nome_repositorio
 				  
-2. Adicionando um arquivo ao git 
+2. Adicionando um arquivo ao conjunto que iremos subir 
    git add nome_arquivo
-3. Adicionando todos os arquivos de um diretorio ao git
+3. Adicionando todos os arquivos ao conjunto de arquivos que vamos subir
    git add .
-4.    
+4. Preparando arquivos para envio a servidor
+   4.1 Git commit para um unico arquivo 
+       git commit  a.txt -m "estou enviando um arquivo texto"
+   4.2 Git commit para todos os arquivos adicionados pelo add 
+       git commit -a - m "todos os arquivos até 12/08, 17:49 foram comitados"
+   4.3 git push 
+       ->> leva todos os arquivos adicionados
+           (git add) e devidamente commitados (git commit)
+           para repositorio do github
+
+!!! push -->> empurrar - enviar
+    pull -->> puxar    - buscar	  -- atualizar nosso computador com possiveis atualizações no servidor	   
+
+5. Atualizando meu computador com possiveis atualizações a partir do
+   repositorio git pull.
+
+6. Clonando o projeto a partir do repositorio git hub
+    6.1 Criar o diretório novo
+    6.2 Ir ao repositorio de onde vai clonar o projeto no github
+    6.3 Click no botal Código( verde ) a direita acima
+        .Marcar a opção HTTPS
+		.A direita da linha onde esta a url marcar o quadratinho de copiar 
+    6.4 Voltar ao git bash
+	    . digitar git clone colar_o_caminho_copiado acima
+		. ficarã assim:
+		  git clone https://github.com/cleber-almeida-souza/curso_git_1.git .
+          obs. note que depois da url foi adicionado um ponto (.) isso faz parte do comando
+		  
+		  
+   
+   
    
