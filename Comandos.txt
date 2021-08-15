@@ -57,7 +57,41 @@ Comandos github
 		. ficarã assim:
 		  git clone https://github.com/cleber-almeida-souza/curso_git_1.git .
           obs. note que depois da url foi adicionado um ponto (.) isso faz parte do comando
-		  
+
+7. Reset do nosso diretório local.
+   
+   Se atualizamos nosso diretório com a ultima versão do repositorio git hub e 
+   fizemos algumas alterações mas percebemos que deu problemas nelas, podemos recuperar
+   os dados do repositorio do git hub ignorando todas as alterações que fizemos em nosso ambiente
+   local.
+   
+   71.  git reset --hard origin/master
+   
+8. Branch
+   Ramificação de um projeto
+   . . . é a forma que o git separa as versões do projeto
+   8.1 git branch mostra os brnches existentes e  master
+   8.2 criando branch
+       git branch nome_branch
+   ! se digitarmos git branch novamente vamos ver a nova branch com nome_branch 
+   8.3 Deletando um branch
+       git branch -d nome_branch
+	   ou
+	   git branch --delete nome_branch
+   9.  Passando para uma das branchs criadas
+       git checkout nome_branch 
+  10.  Criando novo brant e passando para ele 
+       git checkout -b nome_do_branch
+	   
+	   
+  11. git Merge
+	   
+	   
+	   
+	   
+   
+	   
+   
 		  
    
    
